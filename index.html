@@ -1,29 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AutoArchiver Upload</title>
-  <style>
-    .hidden-input,
-    .hidden-label {
-      display: none;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoArchiver Email Manual</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
-  <h2>📸 Captura automática</h2>
-  <p id="info">Esperando foto...</p>
-
-  <input type="file" accept="image/*" id="fileInput1" class="hidden-input" capture="environment" />
-
-  <form id="form" method="POST" enctype="multipart/form-data" target="_blank">
-    <input type="hidden" name="_subject" id="subject" />
-    <input type="hidden" name="_next" value="https://sparkgy.github.io/AutoArchiver/success.html" />
-    <input type="file" id="hiddenFile" name="attachment" style="display:none" />
-  </form>
+  <h2>📄 Documento generado</h2>
+  <label for="fileInput1" class="hidden-label">Upload an image</label>
+  <label for="fileInput1" class="hidden-label">Upload an image</label>
+  <input type="file" accept="image/*" id="fileInput1" class="hidden-input" title="Upload an image" />
+  <a id="emailLink" href="#" class="hidden-email-link" target="_blank">📧 Enviar por correo</a>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
@@ -34,8 +22,7 @@
     const tarea = params.get("tarea");
     const ruta = params.get("ruta");
 
-    const info = document.getElementById("info");
-    info.innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
+    document.getElementById("info").innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
 
     window.onload = () => {
       setTimeout(() => {
@@ -53,25 +40,27 @@
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF();
         const img = new Image();
+
         img.onload = async function () {
           pdf.addImage(img, 'JPEG', 10, 10, 190, 270);
           const pdfBlob = pdf.output("blob");
           const fileName = `${tag}_${tarea}.pdf`;
 
-          const form = document.getElementById("form");
-          const hiddenFile = document.getElementById("hiddenFile");
-          const subject = document.getElementById("subject");
+          // Descargar PDF
+          const url = URL.createObjectURL(pdfBlob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          URL.revokeObjectURL(url);
 
-          const dataTransfer = new DataTransfer();
-          dataTransfer.items.add(new File([pdfBlob], fileName, { type: "application/pdf" }));
-          hiddenFile.files = dataTransfer.files;
-
-          subject.value = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
-
-          // Reemplazá esto si validaste el correo en FormSubmit.io
-          form.action = "https://formsubmit.io/send/avalero@sparkgy.com";
-
-          form.submit();
+          // Mostrar link de mail
+          const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
+          const bodyText = `Adjuntar el archivo PDF descargado automáticamente.\n\nGracias.`;
+          const emailLink = document.getElementById("emailLink");
+          emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
+          emailLink.style.display = "block";
+          emailLink.innerText = "📧 Enviar por correo a AutoArchiver";
         };
         img.src = imgData;
       };
@@ -79,5 +68,4 @@
     });
   </script>
 </body>
-
 </html>
