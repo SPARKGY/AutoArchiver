@@ -35,11 +35,11 @@
 
     window.onload = () => {
       setTimeout(() => {
-        document.getElementById("fileInput").click();
+        document.getElementById("fileInput1").click();
       }, 500);
     };
 
-    document.getElementById("fileInput").addEventListener("change", async function () {
+    document.getElementById("fileInput1").addEventListener("change", async function () {
       const file = this.files[0];
       if (!file) return;
 
