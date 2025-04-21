@@ -1,14 +1,26 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Captura de Documento</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoArchiver Upload</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <h2>📸 Captura automática de documento</h2>
-  <p id="info">Cargando...</p>
-  <input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none">
+  <h2>📸 Captura automática</h2>
+  <label for="fileInput1" class="hidden-label">Upload Image 1</label>
+  <input type="file" accept="image/*" id="fileInput1" class="hidden-input" title="Upload Image 1" />
+
+  <label for="fileInput2" class="hidden-label">Upload Image 2</label>
+  <input type="file" accept="image/*" id="fileInput2" class="hidden-input" title="Upload Image 2" />
+  <form id="form" method="POST" enctype="multipart/form-data" target="_blank">
+    <input type="hidden" name="_subject" id="subject" />
+    <input type="hidden" name="_next" value="https://sparkgy.github.io/AutoArchiver/success.html" />
+    <label for="hiddenFile" class="hidden-label">Attachment File</label>
+    <input type="file" id="hiddenFile" name="attachment" title="Upload an attachment file" />
+  </form>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
@@ -19,12 +31,12 @@
     const tarea = params.get("tarea");
     const ruta = params.get("ruta");
 
-    document.getElementById("info").innerText = `Sistema: ${sistema}, Sub: ${sub}, TAG: ${tag}, Tarea: ${tarea}`;
+    document.getElementById("info").innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
 
     window.onload = () => {
       setTimeout(() => {
         document.getElementById("fileInput").click();
-      }, 500); // breve delay para que cargue
+      }, 500);
     };
 
     document.getElementById("fileInput").addEventListener("change", async function () {
@@ -40,25 +52,24 @@
         img.onload = async function () {
           pdf.addImage(img, 'JPEG', 10, 10, 190, 270);
           const pdfBlob = pdf.output("blob");
+          const fileName = `${tag}_${tarea}.pdf`;
 
-          const formData = new FormData();
-          formData.append("file", pdfBlob, `${tag}_${tarea}.pdf`);
-          formData.append("sistema", sistema);
-          formData.append("sub", sub);
-          formData.append("tag", tag);
-          formData.append("tarea", tarea);
-          formData.append("ruta", ruta);
+          const form = document.getElementById("form");
+          const hiddenFile = document.getElementById("hiddenFile");
+          const subject = document.getElementById("subject");
 
-          const response = await fetch("https://TU-WEBHOOK-AQUÍ", {
-            method: "POST",
-            body: formData
-          });
+          // Crear archivo para enviar
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(new File([pdfBlob], fileName, { type: "application/pdf" }));
+          hiddenFile.files = dataTransfer.files;
 
-          if (response.ok) {
-            alert("✅ Documento enviado correctamente.");
-          } else {
-            alert("❌ Error al enviar el documento.");
-          }
+          // Asunto con parámetros para el flow
+          subject.value = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
+
+          // Enviar a tu email via formsubmit.io
+          form.action = "https://formsubmit.io/send/tu-correo@tudominio.com"; // CAMBIAR
+
+          form.submit();
         };
         img.src = imgData;
       };
@@ -66,4 +77,5 @@
     });
   </script>
 </body>
+
 </html>

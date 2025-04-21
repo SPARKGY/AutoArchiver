@@ -1,0 +1,16 @@
+/* Ocultar inputs con la clase hidden-input */
+.hidden-input {
+  display: none;
+}
+
+/* Estilo para el título */
+h2 {
+  font-family: Arial, sans-serif;
+  font-size: 24px;
+  color: #333;
+}
+
+/* Estilo para el formulario */
+form {
+  margin-top: 20px;
+}
