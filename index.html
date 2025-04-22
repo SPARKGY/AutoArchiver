@@ -26,11 +26,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
-    const sistema = params.get("sistema");
-    const sub = params.get("sub");
-    const tag = params.get("tag");
-    const tarea = params.get("tarea");
-    const ruta = params.get("ruta");
+    const sistema = params.get("sistema")?.replace(/[-_]/g, " ");
+    const sub = params.get("sub")?.replace(/[-_]/g, " ");
+    const tag = params.get("tag")?.replace(/[-_]/g, " ");
+    const tarea = params.get("tarea")?.replace(/[-_]/g, " ");
+    const ruta = params.get("ruta")?.replace(/[-_]/g, " ");
 
     document.getElementById("info").innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
 
