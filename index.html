@@ -3,15 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoArchiver Email Manual</title>
+  <title>AutoArchiver - Generador de PDF</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h2>📄 Documento generado</h2>
-  <label for="fileInput1" class="hidden-label">Upload an image</label>
-  <label for="fileInput1" class="hidden-label">Upload an image</label>
-  <input type="file" accept="image/*" id="fileInput1" class="hidden-input" title="Upload an image" />
-  <a id="emailLink" href="#" class="hidden-email-link" target="_blank">📧 Enviar por correo</a>
+  <h2>📄 Generador de PDF desde Imagen</h2>
+  <p id="info">Por favor, sigue los pasos para generar y enviar tu documento.</p>
+
+  <!-- Paso 1: Seleccionar imagen -->
+  <div class="step">
+    <h3>Paso 1: Selecciona una imagen</h3>
+    <input type="file" accept="image/*" id="fileInput1" class="hidden-input" title="Seleccionar imagen" />
+    <button id="selectImageButton">📷 Seleccionar Imagen</button>
+  </div>
+
+  <!-- Paso 2: Enviar por correo -->
+  <div class="step hidden" id="emailStep">
+    <h3>Paso 2: Enviar por correo</h3>
+    <a id="emailLink" href="#" class="email-link" target="_blank">📧 Enviar PDF por correo</a>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
@@ -24,11 +34,10 @@
 
     document.getElementById("info").innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
 
-    window.onload = () => {
-      setTimeout(() => {
-        document.getElementById("fileInput1").click();
-      }, 500);
-    };
+    // Botón para seleccionar imagen
+    document.getElementById("selectImageButton").addEventListener("click", () => {
+      document.getElementById("fileInput1").click();
+    });
 
     document.getElementById("fileInput1").addEventListener("change", async function () {
       const file = this.files[0];
@@ -60,7 +69,9 @@
           const emailLink = document.getElementById("emailLink");
           emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
           emailLink.style.display = "block";
-          emailLink.innerText = "📧 Enviar por correo a AutoArchiver";
+
+          // Mostrar paso 2
+          document.getElementById("emailStep").style.display = "block";
         };
         img.src = imgData;
       };
