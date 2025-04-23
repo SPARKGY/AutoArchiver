@@ -10,11 +10,11 @@
   <h2>📄 Generador de PDF desde Imagen</h2>
   <p id="info">Por favor, sigue los pasos para generar y enviar tu documento.</p>
 
-  <!-- Paso 1: Seleccionar imagen -->
+  <!-- Paso 1: Seleccionar imágenes -->
   <div class="step">
-    <h3>Paso 1: Selecciona una imagen</h3>
-    <input type="file" accept="image/*" id="fileInput1" class="hidden-input" title="Seleccionar imagen" />
-    <button id="selectImageButton">📷 Seleccionar Imagen</button>
+    <h3>Paso 1: Selecciona imágenes</h3>
+    <input type="file" accept="image/*" id="fileInput1" class="hidden-input" title="Seleccionar imágenes" multiple />
+    <button id="selectImageButton">📷 Seleccionar Imágenes</button>
   </div>
 
   <!-- Paso 2: Enviar por correo -->
@@ -34,48 +34,69 @@
 
     document.getElementById("info").innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
 
-    // Botón para seleccionar imagen
+    // Botón para seleccionar imágenes
     document.getElementById("selectImageButton").addEventListener("click", () => {
       document.getElementById("fileInput1").click();
     });
 
     document.getElementById("fileInput1").addEventListener("change", async function () {
-      const file = this.files[0];
-      if (!file) return;
+      const files = Array.from(this.files);
+      if (files.length === 0) return;
 
-      const reader = new FileReader();
-      reader.onload = async function () {
-        const imgData = reader.result;
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF();
-        const img = new Image();
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
 
-        img.onload = async function () {
-          pdf.addImage(img, 'JPEG', 10, 10, 190, 270);
-          const pdfBlob = pdf.output("blob");
-          const fileName = `${tag}_${tarea}.pdf`;
+      for (const [index, file] of files.entries()) {
+        const reader = new FileReader();
+        reader.onload = async function () {
+          const imgData = reader.result;
+          const img = new Image();
 
-          // Descargar PDF
-          const url = URL.createObjectURL(pdfBlob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          a.click();
-          URL.revokeObjectURL(url);
+          img.onload = function () {
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = img.width;
+            const imgHeight = img.height;
+            const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
 
-          // Mostrar link de mail
-          const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
-          const bodyText = `Adjuntar el archivo PDF descargado automáticamente.\n\nGracias.`;
-          const emailLink = document.getElementById("emailLink");
-          emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
-          emailLink.style.display = "block";
+            const imgX = (pageWidth - imgWidth * ratio) / 2;
+            const imgY = (pageHeight - imgHeight * ratio) / 2;
 
-          // Mostrar paso 2
-          document.getElementById("emailStep").style.display = "block";
+            pdf.addImage(img, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+
+            // Agregar una nueva página si no es la última imagen
+            if (index < files.length - 1) {
+              pdf.addPage();
+            }
+
+            // Descargar PDF al finalizar la última imagen
+            if (index === files.length - 1) {
+              const pdfBlob = pdf.output("blob");
+              const fileName = `${tag}_${tarea}.pdf`;
+
+              // Descargar PDF
+              const url = URL.createObjectURL(pdfBlob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = fileName;
+              a.click();
+              URL.revokeObjectURL(url);
+
+              // Mostrar link de mail
+              const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
+              const bodyText = `Adjuntar el archivo PDF descargado automáticamente.\n\nGracias.`;
+              const emailLink = document.getElementById("emailLink");
+              emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
+              emailLink.style.display = "block";
+
+              // Mostrar paso 2
+              document.getElementById("emailStep").style.display = "block";
+            }
+          };
+          img.src = imgData;
         };
-        img.src = imgData;
-      };
-      reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+      }
     });
   </script>
 </body>
