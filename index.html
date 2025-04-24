@@ -46,57 +46,62 @@
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF();
 
-      for (const [index, file] of files.entries()) {
-        const reader = new FileReader();
-        reader.onload = async function () {
-          const imgData = reader.result;
-          const img = new Image();
+      const processImage = (file, index) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = function () {
+            const imgData = reader.result;
+            const img = new Image();
 
-          img.onload = function () {
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = img.width;
-            const imgHeight = img.height;
-            const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+            img.onload = function () {
+              const pageWidth = pdf.internal.pageSize.getWidth();
+              const pageHeight = pdf.internal.pageSize.getHeight();
+              const imgWidth = img.width;
+              const imgHeight = img.height;
+              const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
 
-            const imgX = (pageWidth - imgWidth * ratio) / 2;
-            const imgY = (pageHeight - imgHeight * ratio) / 2;
+              const imgX = (pageWidth - imgWidth * ratio) / 2;
+              const imgY = (pageHeight - imgHeight * ratio) / 2;
 
-            pdf.addImage(img, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+              pdf.addImage(img, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
 
-            // Agregar una nueva página si no es la última imagen
-            if (index < files.length - 1) {
-              pdf.addPage();
-            }
-
-            // Descargar PDF al finalizar la última imagen
-            if (index === files.length - 1) {
-              const pdfBlob = pdf.output("blob");
-              const fileName = `${tag}_${tarea}.pdf`;
-
-              // Descargar PDF
-              const url = URL.createObjectURL(pdfBlob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = fileName;
-              a.click();
-              URL.revokeObjectURL(url);
-
-              // Mostrar link de mail
-              const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
-              const bodyText = `Adjuntar el archivo PDF descargado automáticamente.\n\nGracias.`;
-              const emailLink = document.getElementById("emailLink");
-              emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
-              emailLink.style.display = "block";
-
-              // Mostrar paso 2
-              document.getElementById("emailStep").style.display = "block";
-            }
+              // Agregar una nueva página si no es la última imagen
+              if (index < files.length - 1) {
+                pdf.addPage();
+              }
+              resolve();
+            };
+            img.src = imgData;
           };
-          img.src = imgData;
-        };
-        reader.readAsDataURL(file);
+          reader.readAsDataURL(file);
+        });
+      };
+
+      for (const [index, file] of files.entries()) {
+        await processImage(file, index);
       }
+
+      // Descargar PDF al finalizar la última imagen
+      const pdfBlob = pdf.output("blob");
+      const fileName = `${tag}_${tarea}.pdf`;
+
+      // Descargar PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Mostrar link de mail
+      const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
+      const bodyText = `Adjuntar el archivo PDF descargado automáticamente.\n\nGracias.`;
+      const emailLink = document.getElementById("emailLink");
+      emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
+      emailLink.style.display = "block";
+
+      // Mostrar paso 2
+      document.getElementById("emailStep").style.display = "block";
     });
   </script>
 </body>
