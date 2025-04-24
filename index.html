@@ -9,6 +9,7 @@
 <body>
   <h2>📄 Generador de PDF desde Imagen</h2>
   <p id="info">Por favor, sigue los pasos para generar y enviar tu documento.</p>
+  <p id="statusMessage" class="status-message"></p>
 
   <!-- Paso 1: Seleccionar imágenes -->
   <div class="step">
@@ -41,8 +42,14 @@
 
     document.getElementById("fileInput1").addEventListener("change", async function () {
       const files = Array.from(this.files);
-      if (files.length === 0) return;
+      const statusMessage = document.getElementById("statusMessage");
 
+      if (files.length === 0) {
+        statusMessage.innerText = "No se seleccionaron imágenes.";
+        return;
+      }
+
+      statusMessage.innerText = "Procesando imágenes, por favor espera...";
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF();
 
@@ -78,6 +85,7 @@
       };
 
       for (const [index, file] of files.entries()) {
+        statusMessage.innerText = `Procesando imagen ${index + 1} de ${files.length}...`;
         await processImage(file, index);
       }
 
@@ -92,6 +100,8 @@
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
+
+      statusMessage.innerText = "PDF generado y descargado exitosamente.";
 
       // Mostrar link de mail
       const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
