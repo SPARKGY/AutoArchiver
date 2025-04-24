@@ -84,7 +84,7 @@
 
               // Mostrar link de mail
               const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
-              const bodyText = `Adjuntar el archivo PDF descargado automáticamente.\n\nGracias.`;
+              const bodyText = `Adjunte el archivo PDF descargado automáticamente.\n\nGracias.`;
               const emailLink = document.getElementById("emailLink");
               emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
               emailLink.style.display = "block";
