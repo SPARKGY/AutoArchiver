@@ -26,13 +26,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
-    const sistema = params.get("sistema")?.replace(/[-_]/g, " ");
-    const sub = params.get("sub")?.replace(/[-_]/g, " ");
-    const tag = params.get("tag")?.replace(/[-_]/g, " ");
-    const tarea = params.get("tarea")?.replace(/[-_]/g, " ");
-    const ruta = params.get("ruta")?.replace(/[-_]/g, " ");
+    const numerodeproyecto = params.get("NUMERODEPROYECTO")?.replace(/[-_]/g, " ");
+    const precomcom = params.get("PRECOMCOM")?.replace(/[-_]/g, " ");
+    const subsistema = params.get("SUBSISTEMA")?.replace(/[-_]/g, " ");
+    const disciplina = params.get("DISCIPLINA")?.replace(/[-_]/g, " ");
+    const nombrearchivoescaneado = params.get("NOMBREARCHIVOESCANEADO")?.replace(/[-_]/g, " ");
 
-    document.getElementById("info").innerText = `Sistema: ${sistema}, TAG: ${tag}, Tarea: ${tarea}`;
+    document.getElementById("info").innerText = 
+      `Proyecto: ${numerodeproyecto}, Precom/Com: ${precomcom}, Subsistema: ${subsistema}, Disciplina: ${disciplina}, Archivo: ${nombrearchivoescaneado}`;
 
     // Botón para seleccionar imágenes
     document.getElementById("selectImageButton").addEventListener("click", () => {
@@ -72,7 +73,7 @@
             // Descargar PDF al finalizar la última imagen
             if (index === files.length - 1) {
               const pdfBlob = pdf.output("blob");
-              const fileName = `${tag}_${tarea}.pdf`;
+             const fileName = `${nombrearchivoescaneado}.pdf`;
 
               // Descargar PDF
               const url = URL.createObjectURL(pdfBlob);
@@ -83,7 +84,7 @@
               URL.revokeObjectURL(url);
 
               // Mostrar link de mail
-              const subjectText = `sistema=${sistema};sub=${sub};tag=${tag};tarea=${tarea};ruta=${ruta}`;
+              const subjectText = `NUMERODEPROYECTO=${numerodeproyecto};PRECOMCOM=${precomcom};SUBSISTEMA=${subsistema};DISCIPLINA=${disciplina};NOMBREARCHIVOESCANEADO=${nombrearchivoescaneado}`;
               const bodyText = `Adjunte el archivo PDF descargado automáticamente.\n\nGracias.`;
               const emailLink = document.getElementById("emailLink");
               emailLink.href = `mailto:avalero@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
