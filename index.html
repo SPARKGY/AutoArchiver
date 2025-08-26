@@ -54,16 +54,28 @@
           const img = new Image();
 
           img.onload = function () {
+            let imgWidth = img.width;
+            let imgHeight = img.height;
+            let rotate = false;
+
+            // Si la imagen está horizontal, rotarla
+            if (imgWidth > imgHeight) {
+              rotate = true;
+              [imgWidth, imgHeight] = [imgHeight, imgWidth]; // Intercambia ancho y alto
+            }
+
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = img.width;
-            const imgHeight = img.height;
             const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
 
             const imgX = (pageWidth - imgWidth * ratio) / 2;
             const imgY = (pageHeight - imgHeight * ratio) / 2;
 
-            pdf.addImage(img, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+            if (rotate) {
+              pdf.addImage(img, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio, undefined, 'FAST', 90);
+            } else {
+              pdf.addImage(img, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+            }
 
             // Agregar una nueva página si no es la última imagen
             if (index < files.length - 1) {
