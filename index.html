@@ -45,7 +45,7 @@
       if (files.length === 0) return;
 
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF();
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
       for (const [index, file] of files.entries()) {
         const reader = new FileReader();
