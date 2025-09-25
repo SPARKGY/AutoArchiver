@@ -28,6 +28,7 @@
   <div class="step hidden" id="emailStep">
     <h3>Paso 2: Enviar por correo</h3>
     <a id="emailLink" href="#" class="email-link" target="_blank">📧 Enviar PDF por correo</a>
+    <p id="subjectDisplay" class="hidden"></p>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -38,6 +39,7 @@
     const subsistema = params.get("SUBSISTEMA")?.replace(/[-_]/g, " ");
     const disciplina = params.get("DISCIPLINA")?.replace(/[-_]/g, " ");
     const nombrearchivoescaneado = params.get("NOMBREARCHIVOESCANEADO")?.replace(/[-_]/g, " ");
+    const subjectDisplay = document.getElementById("subjectDisplay");
 
     document.getElementById("info").innerText = 
       `Proyecto: ${numerodeproyecto}, Precom/Com: ${precomcom}, Subsistema: ${subsistema}, Disciplina: ${disciplina}, Archivo: ${nombrearchivoescaneado}`;
@@ -140,6 +142,8 @@
       const emailLink = document.getElementById("emailLink");
       emailLink.href = `mailto:sistematizacion@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
       emailLink.style.display = "block";
+      subjectDisplay.textContent = `Asunto: ${subjectText}`;
+      subjectDisplay.classList.remove("hidden");
 
       // Mostrar paso 2
       document.getElementById("emailStep").style.display = "block";
@@ -171,6 +175,8 @@
       const emailLink = document.getElementById("emailLink");
       emailLink.href = `mailto:sistematizacion@sparkgy.com?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
       emailLink.style.display = "block";
+      subjectDisplay.textContent = `Asunto: ${subjectText}`;
+      subjectDisplay.classList.remove("hidden");
 
       // Mostrar paso 2
       document.getElementById("emailStep").style.display = "block";
