@@ -1,6 +1,5 @@
 customtkinter
 pymupdf
 opencv-python
-pyzbar
 pywin32
 pillow
