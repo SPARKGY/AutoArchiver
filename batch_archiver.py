@@ -53,6 +53,8 @@ class AutoArchiverApp(DndCTk):
         self.pan_offset_y = 0
         self.drag_start_x = 0
         self.drag_start_y = 0
+        self.current_page_index = 0
+        self.total_pages = 0
 
         # Layout Configuration
         self.grid_columnconfigure(1, weight=1)
@@ -112,19 +114,47 @@ class AutoArchiverApp(DndCTk):
         self.file_listbox.bind("<<ListboxSelect>>", self.on_list_select)
 
         # Image Viewer (Right of Split)
+        # Image Viewer (Right of Split)
         self.viewer_frame = ctk.CTkFrame(self.split_frame, fg_color="#1A1A1A")
         self.viewer_frame.grid(row=0, column=1, sticky="nsew")
         self.viewer_frame.pack_propagate(False)
+
+        # -- Toolbar --
+        self.toolbar_frame = ctk.CTkFrame(self.viewer_frame, height=40)
+        self.toolbar_frame.pack(side="top", fill="x", padx=2, pady=2)
         
-        self.viewer_label = ctk.CTkLabel(self.viewer_frame, text="Document Preview (Page 1)", font=ctk.CTkFont(size=10))
-        self.viewer_label.pack(side="top", pady=2)
+        # Toolbar Buttons
+        self.btn_prev = ctk.CTkButton(self.toolbar_frame, text="<", width=30, command=self.prev_page)
+        self.btn_prev.pack(side="left", padx=2)
         
+        self.lbl_page = ctk.CTkLabel(self.toolbar_frame, text="0 / 0", width=50)
+        self.lbl_page.pack(side="left", padx=2)
+        
+        self.btn_next = ctk.CTkButton(self.toolbar_frame, text=">", width=30, command=self.next_page)
+        self.btn_next.pack(side="left", padx=2)
+        
+        ctk.CTkLabel(self.toolbar_frame, text="|", width=10).pack(side="left", padx=5)
+
+        self.btn_zoom_out = ctk.CTkButton(self.toolbar_frame, text="-", width=30, command=lambda: self.adjust_zoom(0.9))
+        self.btn_zoom_out.pack(side="left", padx=2)
+        
+        self.btn_zoom_in = ctk.CTkButton(self.toolbar_frame, text="+", width=30, command=lambda: self.adjust_zoom(1.1))
+        self.btn_zoom_in.pack(side="left", padx=2)
+
+        self.btn_fit_width = ctk.CTkButton(self.toolbar_frame, text="Fit Width", width=70, command=self.fit_width)
+        self.btn_fit_width.pack(side="left", padx=2)
+
+        self.btn_fit_view = ctk.CTkButton(self.toolbar_frame, text="Fit Page", width=70, command=self.fit_view)
+        self.btn_fit_view.pack(side="left", padx=2)
+        
+        # Viewer Canvas
         self.canvas = tk.Canvas(self.viewer_frame, bg="#333333", highlightthickness=0)
         self.canvas.pack(side="left", fill="both", expand=True)
         
         # Canvas Controls
-        self.canvas.bind("<ButtonPress-1>", self.on_drag_start)
-        self.canvas.bind("<B1-Motion>", self.on_drag_motion)
+        # Middle Click Pan (Windows generic: <Button-2> or <ButtonPress-2>)
+        self.canvas.bind("<ButtonPress-2>", self.on_drag_start)
+        self.canvas.bind("<B2-Motion>", self.on_drag_motion)
         self.canvas.bind("<MouseWheel>", self.on_zoom)  # Windows mouse wheel
 
         # Log & Status (Bottom)
@@ -331,16 +361,28 @@ class AutoArchiverApp(DndCTk):
         # Ideally we'd have a 'current_request_id' to ignore old results.
         self.load_pdf_preview_async(file_path)
 
+    # --- Visualization Updates ---
+
     def load_pdf_preview_async(self, file_path):
         threading.Thread(target=self._load_pdf_thread, args=(file_path,), daemon=True).start()
 
     def _load_pdf_thread(self, file_path):
         try:
             doc = fitz.open(file_path)
-            page = doc.load_page(0) 
-            pix = page.get_pixmap(dpi=150) # Standard preview DPI
+            # Default to page 0
+            self.total_pages = len(doc)
+            self.current_page_index = 0
             
-            # Convert to PIL
+            self._load_page_image(doc, 0)
+            
+        except Exception as e:
+            self.update_log_safe(f"Error previewing file: {e}")
+
+    def _load_page_image(self, doc, page_index):
+        try:
+            page = doc.load_page(page_index) 
+            pix = page.get_pixmap(dpi=150)
+            
             mode = "RGB" if pix.n >= 3 else "L"
             if pix.n == 4: mode = "RGBA"
                 
@@ -348,51 +390,92 @@ class AutoArchiverApp(DndCTk):
             if mode == "RGBA":
                 pil_image = pil_image.convert("RGB")
             
-            # Update UI on main thread
+            # Update UI
             self.after(0, self._on_pdf_loaded, doc, pil_image)
-            
         except Exception as e:
-            self.update_log_safe(f"Error previewing file: {e}")
+            print(f"Page load error: {e}")
 
     def _on_pdf_loaded(self, doc, pil_image):
-        if self.current_pdf_doc:
-            try: self.current_pdf_doc.close()
-            except: pass
-            
+        if self.current_pdf_doc and self.current_pdf_doc != doc:
+             # Only close if it's a DIFFERENT doc object, 
+             # but here we might be reloading pages of same doc.
+             # Logic is simplified: we store doc in self.current_pdf_doc.
+             # If we are just changing pages, we shouldn't close it yet unless we re-opened it.
+             # In _load_pdf_thread we did fitz.open, so it is a new doc.
+             try: self.current_pdf_doc.close()
+             except: pass
+
         self.current_pdf_doc = doc
         self.pil_image = pil_image
+        self.lbl_page.configure(text=f"{self.current_page_index + 1} / {self.total_pages}")
+        
+        # If it's a new doc, reset view. If same doc (page change), maybe keep zoom?
+        # For now, reset view on page change is safer/standard.
         self.zoom_level = 1.0
-        self.pan_offset_x = 0
-        self.pan_offset_y = 0
+        self.fit_view() # Initial fit
+
+    def prev_page(self):
+        if not self.current_pdf_doc or self.current_page_index <= 0: return
+        self.current_page_index -= 1
+        threading.Thread(target=self._reload_current_page, daemon=True).start()
+
+    def next_page(self):
+        if not self.current_pdf_doc or self.current_page_index >= self.total_pages - 1: return
+        self.current_page_index += 1
+        threading.Thread(target=self._reload_current_page, daemon=True).start()
+
+    def _reload_current_page(self):
+         # Re-uses current doc to load page
+         self._load_page_image(self.current_pdf_doc, self.current_page_index)
+
+    def fit_view(self):
+        if not hasattr(self, 'pil_image'): return
+        canvas_w = self.canvas.winfo_width()
+        canvas_h = self.canvas.winfo_height()
+        img_w, img_h = self.pil_image.size
+        
+        scale_w = canvas_w / img_w
+        scale_h = canvas_h / img_h
+        self.zoom_level = min(scale_w, scale_h) * 0.9 # 90% fit
         
         self.display_image(reset_view=True)
 
+    def fit_width(self):
+        if not hasattr(self, 'pil_image'): return
+        canvas_w = self.canvas.winfo_width()
+        img_w, _ = self.pil_image.size
+        
+        self.zoom_level = (canvas_w / img_w) * 0.95
+        
+        # Logic to center horizontally, top align vertically roughly
+        self.display_image(reset_view=False)
+        # Custom reset logic for fit width (center X, top Y)
+        new_w = int(img_w * self.zoom_level)
+        self.pan_offset_x = (canvas_w - new_w) // 2
+        self.pan_offset_y = 20 # Padding top
+        self._update_canvas_coords()
+
+    def adjust_zoom(self, factor):
+        self.zoom_level *= factor
+        self.display_image()
+
     def display_image(self, reset_view=False):
         if not hasattr(self, 'pil_image'): return
-        
-        # Offload resizing to thread to keep UI responsive
         threading.Thread(target=self._resize_image_thread, args=(self.zoom_level, reset_view), daemon=True).start()
 
     def _resize_image_thread(self, zoom, reset_view):
         try:
-            # Resize based on zoom
             width, height = self.pil_image.size
             new_w = int(width * zoom)
             new_h = int(height * zoom)
-            
-            # Use BILINEAR (Fast & Good enough)
             resized = self.pil_image.resize((new_w, new_h), Image.Resampling.BILINEAR)
             tk_image = ImageTk.PhotoImage(resized)
-            
-            # Update Canvas on Main Thread
             self.after(0, self._update_canvas, tk_image, reset_view, new_w, new_h)
         except Exception as e:
             print(f"Resize error: {e}")
 
     def _update_canvas(self, tk_image, reset_view, new_w, new_h):
-        # Keep reference to avoid GC
         self.tk_image = tk_image 
-        
         self.canvas.delete("all")
         
         if reset_view:
@@ -401,6 +484,10 @@ class AutoArchiverApp(DndCTk):
             self.pan_offset_x = (canvas_w - new_w) // 2
             self.pan_offset_y = (canvas_h - new_h) // 2
 
+        self._update_canvas_coords()
+
+    def _update_canvas_coords(self):
+        self.canvas.delete("all")
         self.image_id = self.canvas.create_image(
             self.pan_offset_x, 
             self.pan_offset_y, 
@@ -411,32 +498,55 @@ class AutoArchiverApp(DndCTk):
     def clear_canvas(self):
         self.canvas.delete("all")
         self.current_pdf_doc = None
+        self.lbl_page.configure(text="0 / 0")
 
     def on_drag_start(self, event):
-        self.canvas.scan_mark(event.x, event.y)
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
 
     def on_drag_motion(self, event):
-        self.canvas.scan_dragto(event.x, event.y, gain=1)
-        # Update offsets to track current position for zoom centering
-        # This is strictly not needed if we just trust scan_dragto visual, 
-        # but to keep Zoom concentric we might need coords.
-        # For simple pan speed, scan_dragto is native and fast.
+        # Manual panning logic for smooth control
+        dx = event.x - self.drag_start_x
+        dy = event.y - self.drag_start_y
+        self.pan_offset_x += dx
+        self.pan_offset_y += dy
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+        self._update_canvas_coords()
         
     def on_zoom(self, event):
+        if not hasattr(self, 'pil_image'): return
+        
+        # Mouse centered zoom
         old_zoom = self.zoom_level
         if event.delta > 0:
-            self.zoom_level *= 1.1
+            zoom_factor = 1.1
         else:
-            self.zoom_level *= 0.9
+            zoom_factor = 0.9
             
-        # Limit zoom
-        self.zoom_level = max(0.1, min(5.0, self.zoom_level))
+        new_zoom = old_zoom * zoom_factor
+        new_zoom = max(0.1, min(10.0, new_zoom))
         
-        if old_zoom != self.zoom_level:
-            # Simple zoom: Re-render centered (simplification for speed)
-            # To do proper mouse-centered zoom requires complex offset math.
-            # Sticking to simple center zoom or keeping current top-left.
-            self.display_image() # Re-renders
+        if new_zoom == old_zoom: return
+        self.zoom_level = new_zoom
+        
+        # Calculate new offsets to keep mouse position stable
+        # Current mouse pos relative to image top-left
+        verify_x = event.x - self.pan_offset_x
+        verify_y = event.y - self.pan_offset_y
+        
+        # Expected new mouse pos relative to new image top-left
+        # (It scales by zoom_factor)
+        new_verify_x = verify_x * zoom_factor
+        new_verify_y = verify_y * zoom_factor
+        
+        # We want event.x = new_pan_offset_x + new_verify_x
+        # So: new_pan_offset_x = event.x - new_verify_x
+        
+        self.pan_offset_x = int(event.x - new_verify_x)
+        self.pan_offset_y = int(event.y - new_verify_y)
+        
+        self.display_image(reset_view=False)
 
     # ... (Processing methods remain same until extract_qr) ...
 
