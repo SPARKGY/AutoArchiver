@@ -1,15 +1,22 @@
-import os
 import sys
-import threading
-import tkinter as tk
-from tkinter import filedialog, messagebox
-import customtkinter as ctk
-import fitz  # PyMuPDF
-import cv2
-import numpy as np
-import win32com.client
-from PIL import Image, ImageTk
-from tkinterdnd2 import TkinterDnD, DND_FILES
+import traceback
+
+try:
+    import os
+    import threading
+    import tkinter as tk
+    from tkinter import filedialog, messagebox
+    import customtkinter as ctk
+    import fitz  # PyMuPDF
+    import cv2
+    import numpy as np
+    import win32com.client
+    from PIL import Image, ImageTk
+    from tkinterdnd2 import TkinterDnD, DND_FILES
+except Exception as e:
+    traceback.print_exc()
+    input("CRITICAL IMPORT ERROR: Press Enter to exit...")
+    sys.exit(1)
 
 # Set theme and color
 ctk.set_appearance_mode("Dark")
