@@ -10,6 +10,7 @@ try:
     import fitz  # PyMuPDF
     import cv2
     import numpy as np
+    import zxingcpp
     import win32com.client
     from PIL import Image, ImageTk
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -555,7 +556,7 @@ class AutoArchiverApp(DndCTk):
             doc = fitz.open(pdf_path)
             # Check up to 5 pages
             pages_to_check = min(5, len(doc))
-            detector = cv2.QRCodeDetector()
+            # detector = cv2.QRCodeDetector() # Dropping OpenCV detector in favor of zxing-cpp
 
             # Try 150 DPI first (Faster, often better for large QRs), then 300 DPI
             for dpi in [150, 300]:
@@ -566,35 +567,30 @@ class AutoArchiverApp(DndCTk):
                     # Convert to numpy
                     img_data = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
                     
-                    # Convert to BGR/Gray
+                    # zxingcpp works best with Grayscale or BGR.
+                    # Convert to GRAY for speed and simplicity as QR is BW.
                     if pix.n == 3: # RGB
-                        img = cv2.cvtColor(img_data, cv2.COLOR_RGB2BGR)
+                        img = cv2.cvtColor(img_data, cv2.COLOR_RGB2GRAY)
                     elif pix.n == 4: # RGBA
-                        img = cv2.cvtColor(img_data, cv2.COLOR_RGBA2BGR)
+                        img = cv2.cvtColor(img_data, cv2.COLOR_RGBA2GRAY)
                     else: # Gray or other
-                        img = cv2.cvtColor(img_data, cv2.COLOR_GRAY2BGR)
+                        img = img_data # Already likely single channel
                     
-                    # 1. Standard Detect
-                    data, _, _ = detector.detectAndDecode(img)
-                    if data: return data
+                    # 1. Try standard zxing decode on gray
+                    try:
+                        results = zxingcpp.read_barcodes(img)
+                        for res in results:
+                            if res.text: return res.text
+                    except: pass
                     
-                    # 2. Grayscale + Preprocessing methods
-                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    # 2. Try thresholding (common fix for bad scans)
+                    _, thresh = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+                    try:
+                        results = zxingcpp.read_barcodes(thresh)
+                        for res in results:
+                            if res.text: return res.text
+                    except: pass
                     
-                    # A. Pure Gray
-                    data, _, _ = detector.detectAndDecode(gray)
-                    if data: return data
-                    
-                    # B. Standard Threshold
-                    _, thresh = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-                    data, _, _ = detector.detectAndDecode(thresh)
-                    if data: return data
-
-                    # C. Adaptive Threshold (Good for uneven lighting/shadows)
-                    adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-                    data, _, _ = detector.detectAndDecode(adaptive)
-                    if data: return data
-
             return None
         except Exception as e:
             print(f"QR Error: {e}")
