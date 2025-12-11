@@ -632,9 +632,10 @@ class AutoArchiverApp(DndCTk):
         service_id = config.get("service_id")
         template_id = config.get("template_id")
         user_id = config.get("user_id")
+        access_token = config.get("access_token")
         
         if not all([service_id, template_id, user_id]):
-            self.update_log_safe("  > ERROR: Missing keys in 'config.json'.")
+            self.update_log_safe("  > ERROR: Missing service/template/user keys in 'config.json'.")
             return False
             
         # Read file and encode
@@ -650,6 +651,7 @@ class AutoArchiverApp(DndCTk):
             "service_id": service_id,
             "template_id": template_id,
             "user_id": user_id,
+            "accessToken": access_token, # Required for non-browser API calls
             "template_params": {
                 "qr_text": subject_text,
                 "file_name": os.path.basename(attachment_path),
