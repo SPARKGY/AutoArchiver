@@ -5,3 +5,7 @@ pywin32
 pillow
 tkinterdnd2
 requests
+zxing-cpp
+google-auth
+google-api-python-client
+msal

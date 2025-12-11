@@ -17,6 +17,7 @@ try:
     import requests
     import json
     import base64
+    from cloud_uploader import GDriveUploader, OneDriveUploader
 except Exception as e:
     traceback.print_exc()
     input("CRITICAL IMPORT ERROR: Press Enter to exit...")
@@ -609,7 +610,7 @@ class AutoArchiverApp(DndCTk):
             self.update_log_safe(f"  > Outlook Error: {e}")
             return False
 
-    def send_via_emailjs(self, attachment_path, subject_text):
+    def send_via_emailjs(self, attachment_path, subject_text, download_link=None):
         # Determine paths carefully for config
         if getattr(sys, 'frozen', False):
             base_path = os.path.dirname(sys.executable)
@@ -638,13 +639,24 @@ class AutoArchiverApp(DndCTk):
             self.update_log_safe("  > ERROR: Missing service/template/user keys in 'config.json'.")
             return False
             
-        # Read file and encode
-        try:
-            with open(attachment_path, "rb") as f:
-                encoded_string = base64.b64encode(f.read()).decode('utf-8')
-        except Exception as e:
-            self.update_log_safe(f"  > ERROR reading file: {e}")
-            return False
+        # Prepare content: Link OR Attachment
+        encoded_string = ""
+        file_name = os.path.basename(attachment_path)
+        
+        if download_link:
+            self.update_log_safe("  > Sending Cloud Link instead of attachment.")
+            # We can pass the link in 'content' variable if template uses it, 
+            # OR better, pass it as a separate param 'link' if template supports it.
+            # Assuming template has {{content}} or {{link}}.
+            # We will send BOTH just in case.
+        else:
+            # Read file and encode
+            try:
+                with open(attachment_path, "rb") as f:
+                    encoded_string = base64.b64encode(f.read()).decode('utf-8')
+            except Exception as e:
+                self.update_log_safe(f"  > ERROR reading file: {e}")
+                return False
             
         url = "https://api.emailjs.com/api/v1.0/email/send"
         payload = {
@@ -654,8 +666,9 @@ class AutoArchiverApp(DndCTk):
             "accessToken": access_token, # Required for non-browser API calls
             "template_params": {
                 "qr_text": subject_text,
-                "file_name": os.path.basename(attachment_path),
-                "content": encoded_string 
+                "file_name": file_name,
+                "content": encoded_string, # Empty if using link
+                "link": download_link if download_link else "" # New param
             }
         }
         
@@ -678,19 +691,54 @@ class AutoArchiverApp(DndCTk):
             base_path = os.path.dirname(os.path.abspath(__file__))
         
         config_path = os.path.join(base_path, "config.json")
-        use_emailjs = os.path.exists(config_path)
-        outlook = None
         
-        if not use_emailjs:
+        # Load Config
+        config = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+            except: pass
+            
+        mode = config.get("mode", "office365") # Default to office365
+        use_emailjs = (mode == "cloud_emailjs") or os.path.exists(config_path) # Fallback legacy check
+        
+        outlook = None
+        cloud_uploader = None
+        
+        if mode == "cloud_emailjs":
+            self.update_log_safe("Mode: Cloud Upload + EmailJS Link")
+            cloud_conf = config.get("cloud_config", {})
+            provider = cloud_conf.get("provider", "google_drive")
+            
+            try:
+                if provider == "google_drive":
+                    creds_file = cloud_conf.get("credentials_file", "credentials.json")
+                    creds_path = os.path.join(base_path, creds_file)
+                    cloud_uploader = GDriveUploader(creds_path, 
+                                                    root_folder_name=cloud_conf.get("root_folder_name", "AutoArchive"),
+                                                    sub_folder_name=cloud_conf.get("sub_folder_name", "Scanned"))
+                elif provider == "onedrive":
+                    od_conf_file = cloud_conf.get("onedrive_config_file", "onedrive_config.json")
+                    od_conf_path = os.path.join(base_path, od_conf_file)
+                    cloud_uploader = OneDriveUploader(od_conf_path,
+                                                      root_folder_name=cloud_conf.get("root_folder_name", "AutoArchive"),
+                                                      sub_folder_name=cloud_conf.get("sub_folder_name", "Scanned"))
+            except Exception as e:
+                self.update_log_safe(f"CRITICAL: Cloud Init Failed: {e}")
+                self.reset_ui_after_process()
+                return
+
+        elif mode == "office365":
+            self.update_log_safe("Mode: Outlook (Local)")
             try:
                 outlook = win32com.client.Dispatch("Outlook.Application")
             except Exception as e:
-                self.update_log_safe(f"CRITICAL ERROR: Could not connect to Outlook and no config.json found.")
+                self.update_log_safe(f"CRITICAL ERROR: Could not connect to Outlook.")
                 self.reset_ui_after_process()
                 return
-        else:
-            self.update_log_safe("Using EmailJS configuration...")
-
+        
+        # ... Loop ...
         total = len(self.file_queue)
         
         for i, file_path in enumerate(self.file_queue):
@@ -708,8 +756,20 @@ class AutoArchiverApp(DndCTk):
                     self.update_log_safe(f"  > QR Found: {qr_text}")
                     
                     success = False
-                    if use_emailjs:
-                        success = self.send_via_emailjs(file_path, qr_text)
+                    if mode == "cloud_emailjs" and cloud_uploader:
+                        # Upload first
+                        try:
+                            self.update_log_safe("  > Uploading to Cloud...")
+                            link = cloud_uploader.upload_file(file_path)
+                            self.update_log_safe(f"  > Uploaded. Link generated.")
+                            success = self.send_via_emailjs(file_path, qr_text, download_link=link)
+                        except Exception as up_err:
+                            self.update_log_safe(f"  > Upload Failed: {up_err}")
+                            success = False
+                    
+                    elif use_emailjs: # Legacy or explicit config without cloud mode?
+                         # Fallback to attachment
+                         success = self.send_via_emailjs(file_path, qr_text)
                     else:
                         success = self.create_outlook_mail(outlook, file_path, qr_text)
                     

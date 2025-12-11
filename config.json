@@ -1,4 +1,12 @@
 {
+    "mode": "office365",
+    "cloud_config": {
+        "provider": "google_drive",
+        "credentials_file": "credentials.json",
+        "onedrive_config_file": "onedrive_config.json",
+        "root_folder_name": "AutoArchive",
+        "sub_folder_name": "Scanned"
+    },
     "service_id": "service_f1fb8yb",
     "template_id": "template_7dgz4lk",
     "user_id": "U7oI9BGaQ__4rYrt8",
