@@ -509,24 +509,129 @@ class AutoArchiverApp(DndCTk):
             return None
 
     def create_outlook_mail(self, outlook, attachment_path, subject_text):
-        mail = outlook.CreateItem(0) 
-        mail.Subject = subject_text
-        mail.To = "sistematizacion@sparkgy.com"
-        mail.Body = f"Adjunto el documento escaneado: {os.path.basename(attachment_path)}\n\nCodificado: {subject_text}"
-        mail.Attachments.Add(attachment_path)
-        mail.Save() 
+        try:
+            mail = outlook.CreateItem(0) 
+            mail.Subject = subject_text
+            mail.To = "sistematizacion@sparkgy.com"
+            mail.Body = f"Adjunto el documento escaneado: {os.path.basename(attachment_path)}\n\nCodificado: {subject_text}"
+            mail.Attachments.Add(attachment_path)
+            mail.Send() # CHANGED FROM SAVE TO SEND
+            return True
+        except Exception as e:
+            self.update_log_safe(f"  > Outlook Error: {e}")
+            return False
 
-    def log(self, message):
-        self.log_textbox.insert("end", message + "\n")
-        self.log_textbox.see("end")
+    def send_via_emailjs(self, attachment_path, subject_text):
+        import requests
+        import base64
+        import json
+        
+        config_path = "config.json"
+        if not os.path.exists(config_path):
+             self.update_log_safe("  > ERROR: 'config.json' not found. Cannot use EmailJS.")
+             return False
+             
+        try:
+            with open(config_path, "r") as f:
+                config = json.load(f)
+        except:
+             self.update_log_safe("  > ERROR: Invalid 'config.json'.")
+             return False
 
-    # Thread Safe Helpers
-    def update_log_safe(self, message):
-        self.log_textbox.after(0, self.log, message)
+        service_id = config.get("service_id")
+        template_id = config.get("template_id")
+        user_id = config.get("user_id")
+        
+        if not all([service_id, template_id, user_id]):
+            self.update_log_safe("  > ERROR: Missing keys in 'config.json'.")
+            return False
+            
+        # Read file and encode
+        try:
+            with open(attachment_path, "rb") as f:
+                encoded_string = base64.b64encode(f.read()).decode('utf-8')
+        except Exception as e:
+            self.update_log_safe(f"  > ERROR reading file: {e}")
+            return False
+            
+        url = "https://api.emailjs.com/api/v1.0/email/send"
+        payload = {
+            "service_id": service_id,
+            "template_id": template_id,
+            "user_id": user_id,
+            "template_params": {
+                "qr_text": subject_text,
+                "file_name": os.path.basename(attachment_path),
+                # Note: 'content' parameter depends on template support for attachments
+                # Some providers accept specific base64 params. 
+                # If this fails, user needs to rely on Outlook or text only.
+                "content": encoded_string 
+            }
+        }
+        
+        try:
+            response = requests.post(url, json=payload)
+            if response.status_code == 200:
+                return True
+            else:
+                self.update_log_safe(f"  > EmailJS Failed: {response.text}")
+                return False
+        except Exception as e:
+            self.update_log_safe(f"  > Connection Error: {e}")
+            return False
 
-    def update_progress_safe(self, val):
-        self.progressbar.after(0, self.progressbar.set, val)
+    def process_thread(self):
+        # Determine mode: Outlook or EmailJS
+        # For now, simplistic check: if config.json exists, prefer EmailJS?
+        # Or standard: Try Outlook, fallback?
+        # User requested EmailJS explicitly.
+        
+        use_emailjs = os.path.exists("config.json")
+        outlook = None
+        
+        if not use_emailjs:
+            try:
+                outlook = win32com.client.Dispatch("Outlook.Application")
+            except Exception as e:
+                self.update_log_safe(f"CRITICAL ERROR: Could not connect to Outlook and no config.json found.")
+                self.reset_ui_after_process()
+                return
+        else:
+            self.update_log_safe("Using EmailJS configuration...")
 
-if __name__ == "__main__":
-    app = AutoArchiverApp()
-    app.mainloop()
+        total = len(self.file_queue)
+        
+        for i, file_path in enumerate(self.file_queue):
+            if self.stop_event.is_set():
+                self.update_log_safe(">>> BATCH STOPPED BY USER.")
+                break
+
+            filename = os.path.basename(file_path)
+            self.update_log_safe(f"[{i+1}/{total}] Processing: {filename}...")
+            
+            try:
+                qr_text = self.extract_qr_from_pdf(file_path)
+                
+                if qr_text:
+                    self.update_log_safe(f"  > QR Found: {qr_text}")
+                    
+                    success = False
+                    if use_emailjs:
+                        success = self.send_via_emailjs(file_path, qr_text)
+                    else:
+                        success = self.create_outlook_mail(outlook, file_path, qr_text)
+                    
+                    if success:
+                        self.update_log_safe(f"  > Email Sent.")
+                    else:
+                        self.update_log_safe(f"  > FAILED to send email.")
+                else:
+                    self.update_log_safe(f"  > WARNING: No QR code found.")
+
+            except Exception as e:
+                self.update_log_safe(f"  > ERROR: {str(e)}")
+            
+            self.update_progress_safe((i + 1) / total)
+        
+        self.update_log_safe("--- Batch Process Completed ---")
+        self.reset_ui_after_process()

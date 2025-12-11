@@ -17,4 +17,6 @@ echo.
 echo Build Complete!
 echo The executable is located in the "dist" folder:
 echo .\dist\AutoArchiver.exe
+echo Copying config.json to dist...
+copy config.json dist\config.json
 pause
