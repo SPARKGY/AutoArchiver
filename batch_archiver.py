@@ -13,6 +13,9 @@ try:
     import win32com.client
     from PIL import Image, ImageTk
     from tkinterdnd2 import TkinterDnD, DND_FILES
+    import requests
+    import json
+    import base64
 except Exception as e:
     traceback.print_exc()
     input("CRITICAL IMPORT ERROR: Press Enter to exit...")
@@ -299,47 +302,9 @@ class AutoArchiverApp(DndCTk):
             self.log(">>> STOP REQUESTED. Finishing current file...")
             self.status_label.configure(text="Stopping...")
 
-    def process_thread(self):
-        outlook = None
-        try:
-            outlook = win32com.client.Dispatch("Outlook.Application")
-        except Exception as e:
-            self.update_log_safe(f"CRITICAL ERROR: Could not connect to Outlook. {e}")
-            self.reset_ui_after_process()
-            return
-
-        total = len(self.file_queue)
-        
-        for i, file_path in enumerate(self.file_queue):
-            if self.stop_event.is_set():
-                self.update_log_safe(">>> BATCH STOPPED BY USER.")
-                break
-
-            filename = os.path.basename(file_path)
-            self.update_log_safe(f"[{i+1}/{total}] Processing: {filename}...")
-            
-            # Highlight current in list (optional, might be tricky across threads without care)
-            
-            try:
-                qr_text = self.extract_qr_from_pdf(file_path)
-                
-                if qr_text:
-                    self.update_log_safe(f"  > QR Found: {qr_text}")
-                    self.create_outlook_mail(outlook, file_path, qr_text)
-                    self.update_log_safe(f"  > Draft Email Created.")
-                else:
-                    self.update_log_safe(f"  > WARNING: No QR code found.")
-
-            except Exception as e:
-                self.update_log_safe(f"  > ERROR: {str(e)}")
-            
-            self.update_progress_safe((i + 1) / total)
-        
-        self.update_log_safe("--- Batch Process Completed ---")
-        self.reset_ui_after_process()
-
     def reset_ui_after_process(self):
         self.is_processing = False
+        # Schedule UI updates back on the main thread
         self.btn_start.after(0, lambda: self.btn_start.configure(state="normal", text="START CHECK"))
         self.btn_stop.after(0, lambda: self.btn_stop.configure(state="disabled"))
         self.btn_select_files.after(0, lambda: self.btn_select_files.configure(state="normal"))
@@ -529,13 +494,16 @@ class AutoArchiverApp(DndCTk):
             return False
 
     def send_via_emailjs(self, attachment_path, subject_text):
-        import requests
-        import base64
-        import json
+        # Determine paths carefully for config
+        if getattr(sys, 'frozen', False):
+            base_path = os.path.dirname(sys.executable)
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            
+        config_path = os.path.join(base_path, "config.json")
         
-        config_path = "config.json"
         if not os.path.exists(config_path):
-             self.update_log_safe("  > ERROR: 'config.json' not found. Cannot use EmailJS.")
+             self.update_log_safe(f"  > ERROR: 'config.json' not found at {config_path}. Cannot use EmailJS.")
              return False
              
         try:
@@ -569,9 +537,6 @@ class AutoArchiverApp(DndCTk):
             "template_params": {
                 "qr_text": subject_text,
                 "file_name": os.path.basename(attachment_path),
-                # Note: 'content' parameter depends on template support for attachments
-                # Some providers accept specific base64 params. 
-                # If this fails, user needs to rely on Outlook or text only.
                 "content": encoded_string 
             }
         }
@@ -589,11 +554,13 @@ class AutoArchiverApp(DndCTk):
 
     def process_thread(self):
         # Determine mode: Outlook or EmailJS
-        # For now, simplistic check: if config.json exists, prefer EmailJS?
-        # Or standard: Try Outlook, fallback?
-        # User requested EmailJS explicitly.
+        if getattr(sys, 'frozen', False):
+            base_path = os.path.dirname(sys.executable)
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
         
-        use_emailjs = os.path.exists("config.json")
+        config_path = os.path.join(base_path, "config.json")
+        use_emailjs = os.path.exists(config_path)
         outlook = None
         
         if not use_emailjs:
