@@ -150,6 +150,16 @@ class AutoArchiverApp(DndCTk):
         self.update_file_list_ui()
 
     # --- File Management ---
+    def log(self, message):
+        self.log_textbox.insert("end", message + "\n")
+        self.log_textbox.see("end")
+
+    def update_log_safe(self, message):
+        self.after(0, lambda: self.log(message))
+
+    def update_progress_safe(self, value):
+        self.after(0, lambda: self.progressbar.set(value))
+
     def drop(self, event):
         if self.is_processing: return
         raw_files = self.split_file_list(event.data)
@@ -609,3 +619,7 @@ class AutoArchiverApp(DndCTk):
         
         self.update_log_safe("--- Batch Process Completed ---")
         self.reset_ui_after_process()
+
+if __name__ == "__main__":
+    app = AutoArchiverApp()
+    app.mainloop()
