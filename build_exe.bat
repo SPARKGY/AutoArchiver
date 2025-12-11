@@ -11,7 +11,7 @@ REM --name: output name
 REM --add-data: include the icon file inside the exe for runtime access
 REM --hidden-import: ensure pymupdf and others are caught if missed
 
-pyinstaller --noconfirm --onefile --windowed --icon "sparkgy.ico" --name "AutoArchiver" --add-data "sparkgy.ico;." batch_archiver.py
+pyinstaller AutoArchiver.spec
 
 echo.
 echo Build Complete!

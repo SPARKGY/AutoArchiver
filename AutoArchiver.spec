@@ -1,12 +1,14 @@
-# -*- mode: python ; coding: utf-8 -*-
+import tkinterdnd2
+from os.path import join, dirname
 
+tkdnd_path = join(dirname(tkinterdnd2.__file__), 'tkdnd')
 
 a = Analysis(
     ['batch_archiver.py'],
     pathex=[],
     binaries=[],
-    datas=[('sparkgy.ico', '.')],
-    hiddenimports=[],
+    datas=[('sparkgy.ico', '.'), (tkdnd_path, 'tkinterdnd2/tkdnd')],
+    hiddenimports=['tkinterdnd2'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

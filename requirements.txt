@@ -3,3 +3,4 @@ pymupdf
 opencv-python
 pywin32
 pillow
+tkinterdnd2
