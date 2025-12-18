@@ -96,25 +96,28 @@ class PDFScannerFrame(ctk.CTkFrame):
         self.sidebar_desc.grid(row=1, column=0, padx=20, pady=(0, 20))
 
         # Controls
+        self.switch_email_mode = ctk.CTkSwitch(self.sidebar_frame, text="Use EmailJS", state="disabled")
+        self.switch_email_mode.grid(row=2, column=0, padx=20, pady=10)
+
         self.btn_select_files = ctk.CTkButton(self.sidebar_frame, text="Add Files...", command=self.select_files)
-        self.btn_select_files.grid(row=2, column=0, padx=20, pady=10)
+        self.btn_select_files.grid(row=3, column=0, padx=20, pady=10)
 
         self.btn_start = ctk.CTkButton(self.sidebar_frame, text="START CHECK", command=self.start_processing,
                                        fg_color="#2CC985", hover_color="#229C68", text_color="white") # Green
-        self.btn_start.grid(row=3, column=0, padx=20, pady=10)
+        self.btn_start.grid(row=4, column=0, padx=20, pady=10)
 
         self.btn_stop = ctk.CTkButton(self.sidebar_frame, text="STOP", command=self.stop_processing,
                                       fg_color="#D94040", hover_color="#A83232", state="disabled") # Red
-        self.btn_stop.grid(row=4, column=0, padx=20, pady=10)
+        self.btn_stop.grid(row=5, column=0, padx=20, pady=10)
 
         self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Queue", command=self.clear_queue,
                                        fg_color="transparent", border_width=1, text_color=("gray10", "#DCE4EE"))
-        self.btn_clear.grid(row=5, column=0, padx=20, pady=(20, 10))
+        self.btn_clear.grid(row=6, column=0, padx=20, pady=(20, 10))
 
         # Back Button
         self.btn_back = ctk.CTkButton(self.sidebar_frame, text="← Menu", command=lambda: controller.show_frame("MainMenuFrame"),
                                       fg_color="transparent", border_width=1, text_color=("gray10", "#DCE4EE"))
-        self.btn_back.grid(row=6, column=0, padx=20, pady=(20, 10))
+        self.btn_back.grid(row=7, column=0, padx=20, pady=(20, 10))
 
         # --- Main Area (Right) ---
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -568,7 +571,12 @@ class PDFScannerFrame(ctk.CTkFrame):
         else:
             base_path = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(base_path, "config.json")
-        use_emailjs = os.path.exists(config_path)
+        
+        # Check switch state (1=ON, 0=OFF)
+        switch_on = self.switch_email_mode.get()
+        # Use EmailJS ONLY if switch is ON and config exists
+        use_emailjs = (switch_on == 1) and os.path.exists(config_path)
+
         outlook = None
         
         if not use_emailjs:
@@ -576,10 +584,14 @@ class PDFScannerFrame(ctk.CTkFrame):
                 outlook = win32com.client.Dispatch("Outlook.Application")
             except Exception as e:
                 self.update_log_safe(f"CRITICAL ERROR: Outlook not found/config missing.")
+                self.after(0, lambda: messagebox.showerror("Error", "Outlook not found or configuration missing.\nPlease ensure Outlook is installed and configured."))
                 self.reset_ui_after_process()
                 return
 
         total = len(self.file_queue)
+        success_count = 0
+        failed_filenames = []
+
         for i, file_path in enumerate(self.file_queue):
             if self.stop_event.is_set():
                 break
@@ -591,6 +603,10 @@ class PDFScannerFrame(ctk.CTkFrame):
                 if qr_text:
                     qr_text = qr_text.replace("https://sparkgy.github.io/AutoArchiver/?", "")
                     qr_text = qr_text.replace("&", ";")
+                    
+                    # SANITIZATION: Replace _ and - with space in subject
+                    qr_text = qr_text.replace("_", " ").replace("-", " ")
+
                     self.update_log_safe(f"  > QR Found: {qr_text}")
                     
                     # Determine Attachment Name
@@ -601,8 +617,12 @@ class PDFScannerFrame(ctk.CTkFrame):
                             parts = qr_text.split("NOMBREARCHIVOESCANEADO=")
                             if len(parts) > 1:
                                 raw_name = parts[1].strip()
-                                # Sanitize filename
-                                safe_name = "".join([c for c in raw_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
+                                # Sanitize filename: Replace _ and - with space
+                                raw_name = raw_name.replace("_", " ").replace("-", " ")
+                                
+                                # Keep simplified safe characters list but allow spaces now
+                                safe_name = "".join([c for c in raw_name if c.isalnum() or c in (' ', '.')]).strip()
+                                
                                 if safe_name:
                                     if not safe_name.lower().endswith(".pdf"):
                                         safe_name += ".pdf"
@@ -615,14 +635,31 @@ class PDFScannerFrame(ctk.CTkFrame):
                         success = self.send_via_emailjs(file_path, qr_text, target_name)
                     else:
                         success = self.create_outlook_mail(outlook, file_path, qr_text, target_name)
-                    if success: self.update_log_safe(f"  > Email Sent.")
-                    else: self.update_log_safe(f"  > FAILED to send email.")
+                    
+                    if success: 
+                        self.update_log_safe(f"  > Email Sent.")
+                        success_count += 1
+                    else: 
+                        self.update_log_safe(f"  > FAILED to send email.")
+                        failed_filenames.append(filename)
                 else:
                     self.update_log_safe(f"  > WARNING: No QR code found.")
+                    failed_filenames.append(filename)
             except Exception as e:
                 self.update_log_safe(f"  > ERROR: {str(e)}")
+                failed_filenames.append(filename)
+
             self.update_progress_safe((i + 1) / total)
-        self.update_log_safe("--- Batch Process Completed ---")
+        
+        # Batch Summary
+        failed_count = len(failed_filenames)
+        summary_msg = f"--- Batch Process Completed ---\nProcessed: {success_count}/{total} files successfully."
+        if failed_count > 0:
+            summary_msg += f"\nFailed ({failed_count}):\n"
+            for f in failed_filenames:
+                summary_msg += f" - {f}\n"
+        
+        self.update_log_safe(summary_msg)
         self.reset_ui_after_process()
 
 
